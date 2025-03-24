@@ -24,13 +24,13 @@ public:
             "/slam/pose", 10,
             std::bind(&PositionErrorNode::slam_callback, this, std::placeholders::_1));
 
-        // 初始化轨迹发布器
-        mavlink_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/mavlink_path", 10);
-        slam_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/slam_path", 10);
+        // // 初始化轨迹发布器
+        // mavlink_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/mavlink_path", 10);
+        // slam_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/slam_path", 10);
 
-        // 初始化轨迹消息
-        mavlink_path_.header.frame_id = "map";  // 假设坐标系为map
-        slam_path_.header.frame_id = "map";
+        // // 初始化轨迹消息
+        // mavlink_path_.header.frame_id = "map";  // 假设坐标系为map
+        // slam_path_.header.frame_id = "map";
     }
 
 private:
@@ -41,13 +41,16 @@ private:
     geometry_msgs::msg::PoseStamped last_slam_msg_;
     bool has_mavlink_ = false, has_slam_ = false;
 
-    // 添加轨迹发布器
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr mavlink_path_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr slam_path_pub_;
+    // // 添加轨迹发布器
+    // rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr mavlink_path_pub_;
+    // rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr slam_path_pub_;
 
-    // 轨迹消息
-    nav_msgs::msg::Path mavlink_path_;
-    nav_msgs::msg::Path slam_path_;
+    // // 轨迹消息
+    // nav_msgs::msg::Path mavlink_path_;
+    // nav_msgs::msg::Path slam_path_;
+
+    double total_error_ = 0.0;  // 误差总和
+    int sample_count_ = 0;      // 样本数量
 
     // GeographicLib 用于 GPS 经纬度 -> ENU 坐标转换
     GeographicLib::LocalCartesian geo_converter_;
@@ -61,7 +64,7 @@ private:
     void slam_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
         last_slam_msg_ = *msg;
         has_slam_ = true;
-        compute_error();
+        // compute_error();
     }
 
     void compute_error() {
@@ -79,27 +82,34 @@ private:
             double dz = last_slam_msg_.pose.position.z - mav_z;
             double error = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-            RCLCPP_INFO(this->get_logger(), "Position Error: %.3f meters", error);
+            // 更新误差总和和样本数量
+            total_error_ += error;
+            sample_count_++;
 
-            // 发布 MAVLink 轨迹
-            geometry_msgs::msg::PoseStamped mav_pose;
-            mav_pose.header.stamp = this->now();
-            mav_pose.header.frame_id = "map";
-            mav_pose.pose.position.x = mav_x;
-            mav_pose.pose.position.y = mav_y;
-            mav_pose.pose.position.z = mav_z;
-            mav_pose.pose.orientation.w = 1.0;  // 无旋转
-            mavlink_path_.poses.push_back(mav_pose);
-            mavlink_path_.header.stamp = this->now();
-            mavlink_path_pub_->publish(mavlink_path_);
+            // 计算平均误差
+            double average_error = total_error_ / sample_count_;
 
-            // 发布 SLAM 轨迹
-            geometry_msgs::msg::PoseStamped slam_pose = last_slam_msg_;
-            slam_pose.header.stamp = this->now();
-            slam_pose.header.frame_id = "map";
-            slam_path_.poses.push_back(slam_pose);
-            slam_path_.header.stamp = this->now();
-            slam_path_pub_->publish(slam_path_);
+            RCLCPP_INFO(this->get_logger(), "Current Error: %.3f meters, Average Error: %.3f meters", error, average_error);
+
+            // // 发布 MAVLink 轨迹
+            // geometry_msgs::msg::PoseStamped mav_pose;
+            // mav_pose.header.stamp = this->now();
+            // mav_pose.header.frame_id = "map";
+            // mav_pose.pose.position.x = mav_x;
+            // mav_pose.pose.position.y = mav_y;
+            // mav_pose.pose.position.z = mav_z;
+            // mav_pose.pose.orientation.w = 1.0;  // 无旋转
+            // mavlink_path_.poses.push_back(mav_pose);
+            // mavlink_path_.header.stamp = this->now();
+            // mavlink_path_pub_->publish(mavlink_path_);
+
+            // // 发布 SLAM 轨迹
+            // geometry_msgs::msg::PoseStamped slam_pose = last_slam_msg_;
+            // slam_pose.header.stamp = this->now();
+            // slam_pose.header.frame_id = "map";
+            // slam_path_.poses.push_back(slam_pose);
+            // slam_path_.header.stamp = this->now();
+            // slam_path_pub_->publish(slam_path_);
         }
     }
 };
